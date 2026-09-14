@@ -73,8 +73,7 @@ SM_SYSFS_ATTR_RW(dynamic_prediction_level, simagic_attribute_status1_show, simag
 SM_SYSFS_ATTR_RW(steering_torque_assist, simagic_attribute_status1_show, simagic_attribute_settings4_store);
 SM_SYSFS_ATTR_RO(wheel_channel, simagic_attribute_status1_show);
 SM_SYSFS_ATTR_RW(ring_light_enabled, simagic_attribute_status1_show, simagic_attribute_settings3_store);
-//TODO: changing ring light brightness appears to need some other packet to refresh led brightness
-//SM_SYSFS_ATTR_RO(ring_light_brightness, simagic_attribute_status1_show, simagic_attribute_settings3_store);
+SM_SYSFS_ATTR_RW(ring_light_brightness, simagic_attribute_status1_show, simagic_attribute_settings3_store);
 
 static ssize_t simagic_attribute_status1_show(
 	struct device *dev,
@@ -131,6 +130,8 @@ static ssize_t simagic_attribute_status1_show(
 		value = status1.wheel_channel;
 	else if (attr == &dev_attr_ring_light_enabled)
 		value = (status1.ring_light & 0x80) ? 1 : 0;
+	else if (attr == &dev_attr_ring_light_brightness)
+		value = (status1.ring_light & 0x7f);
 	else
 		return sysfs_emit(buf, "Unknown attribute\n");
 
@@ -234,6 +235,10 @@ static ssize_t simagic_attribute_settings3_store(
 		else
 			settings3.ring_light &= 0x7f;
 	}
+	else if (attr == &dev_attr_ring_light_brightness) {
+		// It makes no sense to change brightness with light off, so switch it on...
+		settings3.ring_light = clamp(value, 0, 100) | 0x80;
+	}
 	else
 		return count;
 	
@@ -304,6 +309,7 @@ void simagic_ff_initsysfs(struct hid_device *hid) {
 	if (smff->is_alpha_evo) {
 		device_create_file(&hid->dev, &dev_attr_slew_rate_control);
 		device_create_file(&hid->dev, &dev_attr_ring_light_enabled);
+		device_create_file(&hid->dev, &dev_attr_ring_light_brightness);
 	}
 	smff->sysfs_created = true;
 }
@@ -319,6 +325,7 @@ void simagic_ff_removesysfs(struct hid_device *hid) {
 
 	if (smff->is_alpha_evo) {
 		device_remove_file(&hid->dev, &dev_attr_ring_light_enabled);
+		device_remove_file(&hid->dev, &dev_attr_ring_light_brightness);
 		device_remove_file(&hid->dev, &dev_attr_slew_rate_control);
 	}
 
